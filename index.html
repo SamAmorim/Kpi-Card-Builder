@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    
+    <!-- MASTER SEO & METADATA -->
+    <title>KPI Card Builder - Build Power BI Visuals Like a Pro</title>
+    <meta name="description" content="Stop struggling with DAX for design. Create pixel-perfect, responsive, and animated cards visually. Export directly to Power BI HTML & DAX." />
+    <meta name="keywords" content="Power BI, KPI, DAX, Custom Visual, HTML, CSS, Dashboard Design, UI, UX, Business Intelligence, Low-code, No-code" />
+    <meta name="author" content="KPI Card Builder" />
+    <meta name="robots" content="index, follow" />
+    
+    <!-- Open Graph / Facebook / LinkedIn -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://kpicardbuilder.com/" />
+    <meta property="og:title" content="KPI Card Builder - The Missing UI Layer for Power BI" />
+    <meta property="og:description" content="Design stunning Power BI cards without writing complex DAX. Visual editor, pixel-perfect export." />
+    <meta property="og:image" content="https://kpicardbuilder.com/preview.png" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://kpicardbuilder.com/" />
+    <meta property="twitter:title" content="KPI Card Builder - Build BI Like a Pro" />
+    <meta property="twitter:description" content="Stop struggling with DAX. Build high-fidelity UI for Power BI visually." />
+    <meta property="twitter:image" content="https://kpicardbuilder.com/preview.png" />
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Google Material Symbols -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #020204; /* Deepest Black Base Layer */
+        color: #ffffff;
+        margin: 0;
+        overflow: hidden; /* Prevent scroll on body, app handles it */
+      }
+      
+      /* Gravity Mesh Background */
+      #gravity-canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 0; /* Layer 0: Background */
+        pointer-events: none; /* Let clicks pass through to App */
+      }
+
+      #root {
+        position: relative;
+        z-index: 1; /* Layer 1: App Content */
+      }
+
+      /* Scrollbar refinements */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: #0a0a0a; }
+      ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+      ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+      .perspective-1000 { perspective: 1000px; }
+      .transform-style-3d { transform-style: preserve-3d; }
+      
+      @keyframes float-3d {
+        0%, 100% { transform: rotateX(10deg) rotateY(-10deg) translateY(0px); }
+        50% { transform: rotateX(12deg) rotateY(-8deg) translateY(-8px); }
+      }
+      .animate-float-3d { animation: float-3d 8s ease-in-out infinite; }
+
+      @keyframes beam-scan {
+        0% { top: -20%; opacity: 0; }
+        20% { opacity: 1; }
+        80% { opacity: 1; }
+        100% { top: 120%; opacity: 0; }
+      }
+    </style>
+
+<link rel="stylesheet" href="/index.css">
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "uuid": "https://esm.sh/uuid@^13.0.0"
+  }
+}
+</script>
+  <script type="module" crossorigin src="/assets/index-COxrP4Ms.js"></script>
+</head>
+  <body>
+    <canvas id="gravity-canvas"></canvas>
+    <div id="root"></div>
+    
+    <script>
+      /**
+       * 3D Cyberpunk Gravity Grid (Subtle Version)
+       * Features: 
+       * - Massive Grid
+       * - Gentle Central Gravity
+       * - Subtle Mouse 3D Tilt
+       * - Soft Mouse Repulsion
+       */
+      const canvas = document.getElementById('gravity-canvas');
+      const ctx = canvas.getContext('2d');
+      
+      let width, height;
+      let time = 0;
+      let mouse = { x: 0, y: 0 };
+      let targetMouse = { x: 0, y: 0 }; // For smooth camera lerp
+      
+      // Grid configuration - EXTRA LARGE
+      const spacing = 160; 
+      // How much extra grid to draw beyond screen to accommodate rotation
+      const overdraw = 600; 
+      
+      function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+        // Center mouse initially
+        targetMouse.x = width / 2;
+        targetMouse.y = height / 2;
+      }
+      window.addEventListener('resize', resize);
+      resize();
+
+      window.addEventListener('mousemove', (e) => {
+          targetMouse.x = e.clientX;
+          targetMouse.y = e.clientY;
+      });
+
+      // 1. Calculate the raw grid point with distortions (Gravity + Repulsion)
+      function getDistortedPoint(x, y, cx, cy, mass) {
+        // --- Central Gravity (Toned Down) ---
+        const dx = x - cx;
+        const dy = y - cy;
+        const distSq = dx * dx + dy * dy;
+        
+        // Reduced pull strength
+        let gravityForce = (mass * 80) / (distSq + 40000); 
+        if (gravityForce > 0.4) gravityForce = 0.4; // Hard cap lower
+
+        let newX = x - dx * gravityForce;
+        let newY = y - dy * gravityForce;
+
+        // --- Local Mouse Repulsion (Toned Down) ---
+        // Map mouse screen pos to world approx
+        const mxWorld = (mouse.x - width/2) * 1.2 + width/2;
+        const myWorld = (mouse.y - height/2) * 1.2 + height/2;
+
+        const dMx = newX - mxWorld;
+        const dMy = newY - myWorld;
+        const distMouse = Math.sqrt(dMx*dMx + dMy*dMy);
+        const mouseRadius = 350; // Slightly smaller radius
+        
+        if (distMouse < mouseRadius) {
+            const pushFactor = Math.pow((1 - distMouse / mouseRadius), 2.5); // Higher power = sharper/smaller falloff
+            const pushStrength = 30; // Significantly reduced from 80
+            const angle = Math.atan2(dMy, dMx);
+            
+            newX += Math.cos(angle) * pushStrength * pushFactor;
+            newY += Math.sin(angle) * pushStrength * pushFactor;
+        }
+
+        return { x: newX, y: newY };
+      }
+
+      // 2. Project the point into 3D space based on Rotation
+      function project3D(x, y, cx, cy) {
+          // Normalize coordinates around center
+          let px = x - cx;
+          let py = y - cy;
+          let pz = 0;
+
+          // Rotation Angles (Significantly reduced for subtlety)
+          // Was 0.5, now 0.12 (~7 degrees max tilt)
+          const rotY = ((mouse.x - cx) / width) * 0.12; 
+          const rotX = ((mouse.y - cy) / height) * 0.12;
+
+          // Rotate around Y axis
+          const cosY = Math.cos(rotY);
+          const sinY = Math.sin(rotY);
+          const x1 = px * cosY - pz * sinY;
+          const z1 = px * sinY + pz * cosY;
+
+          // Rotate around X axis
+          const cosX = Math.cos(rotX);
+          const sinX = Math.sin(rotX);
+          const y2 = py * cosX - z1 * sinX;
+          const z2 = py * sinX + z1 * cosX;
+
+          // Perspective Projection
+          const focalLength = 1500; // Flatter lens
+          const scale = focalLength / (focalLength + z2);
+
+          return {
+              x: x1 * scale + cx,
+              y: y2 * scale + cy,
+              scale: scale 
+          };
+      }
+
+      function draw() {
+        // --- Smooth Mouse Lerp (Slower for heavier feel) ---
+        mouse.x += (targetMouse.x - mouse.x) * 0.03;
+        mouse.y += (targetMouse.y - mouse.y) * 0.03;
+
+        // Clear
+        ctx.fillStyle = '#020204'; 
+        ctx.fillRect(0, 0, width, height);
+        
+        const cx = width / 2;
+        const cy = height / 2;
+        const maxDist = Math.sqrt(cx*cx + cy*cy);
+        
+        // Slower breathing
+        const mass = 4000 + Math.sin(time * 1.0) * 800; 
+
+        ctx.lineWidth = 1; // Thinner lines for elegance
+
+        // Loop bounds
+        const startX = -overdraw;
+        const endX = width + overdraw;
+        const startY = -overdraw;
+        const endY = height + overdraw;
+
+        // Helper to get color (Softer opacity)
+        const getColor = (px, py, scale) => {
+            const d = Math.sqrt((px - cx)**2 + (py - cy)**2);
+            const ratio = Math.min(d / (maxDist * 1.2), 1);
+            
+            // Purple (270) -> Blue (210)
+            const hue = 280 - (ratio * 70);
+            const light = 50 - (ratio * 15); // Darker overall
+            
+            // Subtle opacity
+            let alpha = (0.5 - (ratio * 0.4)) * Math.min(scale, 1);
+            if (alpha < 0) alpha = 0;
+
+            return `hsla(${hue}, 80%, ${light}%, ${alpha})`;
+        };
+
+        // --- VERTICAL LINES ---
+        for (let x = startX; x <= endX; x += spacing) {
+          ctx.beginPath();
+          let first = true;
+          
+          for (let y = startY; y <= endY; y += 50) { // Optimization: larger steps
+             const pRaw = getDistortedPoint(x, y, cx, cy, mass);
+             const p3D = project3D(pRaw.x, pRaw.y, cx, cy);
+             
+             if (first) {
+                 ctx.moveTo(p3D.x, p3D.y);
+                 ctx.strokeStyle = getColor(p3D.x, p3D.y, p3D.scale);
+                 first = false;
+             } else {
+                 ctx.lineTo(p3D.x, p3D.y);
+             }
+          }
+          ctx.stroke();
+        }
+
+        // --- HORIZONTAL LINES ---
+        for (let y = startY; y <= endY; y += spacing) {
+          ctx.beginPath();
+          let first = true;
+          
+          for (let x = startX; x <= endX; x += 50) {
+             const pRaw = getDistortedPoint(x, y, cx, cy, mass);
+             const p3D = project3D(pRaw.x, pRaw.y, cx, cy);
+             
+             if (first) {
+                 ctx.moveTo(p3D.x, p3D.y);
+                 ctx.strokeStyle = getColor(p3D.x, p3D.y, p3D.scale);
+                 first = false;
+             } else {
+                 ctx.lineTo(p3D.x, p3D.y);
+             }
+          }
+          ctx.stroke();
+        }
+        
+        // Draw Core "Singularity" Glow - Very Subtle now
+        const center3D = project3D(cx, cy, cx, cy);
+        
+        const grad = ctx.createRadialGradient(center3D.x, center3D.y, 0, center3D.x, center3D.y, 600 * center3D.scale);
+        grad.addColorStop(0, 'rgba(100, 20, 200, 0.08)'); 
+        grad.addColorStop(0.5, 'rgba(30, 40, 180, 0.02)'); 
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(center3D.x, center3D.y, 600 * center3D.scale, 0, Math.PI * 2);
+        ctx.fill();
+
+        time += 0.01;
+        requestAnimationFrame(draw);
+      }
+
+      draw();
+    </script>
+</body>
+</html>
