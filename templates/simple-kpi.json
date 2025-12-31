@@ -1,0 +1,41 @@
+{
+  "id": "simple-kpi",
+  "name": "Simple KPI",
+  "description": "Classic big number card with label.",
+  "category": "KPI",
+  "thumbnail": "linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)",
+  "canvasSettings": { 
+    "width": 300, 
+    "height": 150, 
+    "backgroundColor": "#ffffff",
+    "borderRadius": 12,
+    "borderColor": "#e2e8f0",
+    "borderWidth": 1,
+    "borderStyle": "solid",
+    "showShadow": true
+  },
+  "elements": [
+    {
+      "id": "t1-label",
+      "type": "text",
+      "name": "Label",
+      "content": "Total Revenue",
+      "style": { "position": "absolute", "left": 20, "top": 20, "fontSize": 14, "color": "#64748b", "fontFamily": "Inter, sans-serif" }
+    },
+    {
+      "id": "t1-value",
+      "type": "text",
+      "name": "Value",
+      "content": "$1.2M",
+      "dataBinding": "[Total Revenue]",
+      "style": { "position": "absolute", "left": 20, "top": 50, "fontSize": 48, "fontWeight": "bold", "color": "#0f172a", "fontFamily": "Inter, sans-serif" }
+    },
+    {
+      "id": "t1-icon",
+      "type": "icon",
+      "name": "Icon",
+      "content": "attach_money",
+      "style": { "position": "absolute", "left": 240, "top": 20, "fontSize": 32, "color": "#3b82f6" }
+    }
+  ]
+}

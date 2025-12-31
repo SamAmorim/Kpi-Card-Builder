@@ -1,0 +1,40 @@
+{
+  "id": "dark-stat",
+  "name": "Dark Mode Stat",
+  "description": "Sleek dark themed statistic card.",
+  "category": "Dark",
+  "thumbnail": "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+  "canvasSettings": { 
+    "width": 320, 
+    "height": 120, 
+    "backgroundColor": "#1e293b",
+    "borderRadius": 8,
+    "borderColor": "#334155",
+    "borderWidth": 1,
+    "borderStyle": "solid",
+    "showShadow": false
+  },
+  "elements": [
+    {
+      "id": "t3-bar-fill",
+      "type": "progress-bar",
+      "name": "Progress",
+      "style": { "position": "absolute", "left": 20, "top": 85, "width": 280, "height": 6 },
+      "chartProps": { "value": 72, "color": "#60a5fa", "backgroundColor": "#334155" }
+    },
+    {
+      "id": "t3-val",
+      "type": "text",
+      "name": "Value",
+      "content": "72%",
+      "style": { "position": "absolute", "left": 20, "top": 35, "fontSize": 32, "fontWeight": "bold", "color": "#ffffff", "fontFamily": "Roboto, sans-serif" }
+    },
+    {
+      "id": "t3-lbl",
+      "type": "text",
+      "name": "Label",
+      "content": "Goal Achievement",
+      "style": { "position": "absolute", "left": 20, "top": 15, "fontSize": 12, "color": "#94a3b8", "fontFamily": "Roboto, sans-serif", "textTransform": "uppercase", "letterSpacing": "1px" }
+    }
+  ]
+}
