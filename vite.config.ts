@@ -6,7 +6,7 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
       // ADICIONADO: Caminho base para o GitHub Pages
-      base: '/kpi-card-builder/', 
+      base: '/Kpi-Card-Builder/', 
 
       server: {
         port: 3000,
