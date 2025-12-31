@@ -3,14 +3,14 @@ import { CanvasElement, Translation } from '../types';
 
 interface LayersPanelProps {
   elements: CanvasElement[];
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
+  selectedIds: string[]; 
+  onSelect: (ids: string[]) => void;
   onReorder: (draggedId: string, targetId: string) => void;
   onDelete: (id: string) => void;
   t: Translation;
 }
 
-const LayersPanel: React.FC<LayersPanelProps> = ({ elements, selectedId, onSelect, onReorder, onDelete, t }) => {
+const LayersPanel: React.FC<LayersPanelProps> = ({ elements, selectedIds, onSelect, onReorder, onDelete, t }) => {
   const [draggedItem, setDraggedItem] = React.useState<string | null>(null);
 
   // We display layers in reverse order (top element first) to match visual stacking
@@ -33,6 +33,28 @@ const LayersPanel: React.FC<LayersPanelProps> = ({ elements, selectedId, onSelec
     setDraggedItem(null);
   };
 
+  const handleLayerClick = (e: React.MouseEvent, id: string) => {
+      e.stopPropagation();
+      let newSelection = [...selectedIds];
+      
+      // Multi-select Logic (Shift/Ctrl/Meta)
+      if (e.ctrlKey || e.metaKey) {
+          if (newSelection.includes(id)) {
+              newSelection = newSelection.filter(sid => sid !== id);
+          } else {
+              newSelection.push(id);
+          }
+      } else if (e.shiftKey) {
+          // Simple range select could be implemented here, but for now just add
+          if (!newSelection.includes(id)) newSelection.push(id);
+      } else {
+          // Exclusive Select
+          newSelection = [id];
+      }
+      
+      onSelect(newSelection);
+  };
+
   const getIcon = (type: string) => {
       switch(type) {
           case 'text': return 'title';
@@ -52,47 +74,52 @@ const LayersPanel: React.FC<LayersPanelProps> = ({ elements, selectedId, onSelec
 
   if (elements.length === 0) {
       return (
-          <div className="flex flex-col items-center justify-center h-40 text-gray-600">
-              <span className="material-symbols-outlined text-3xl mb-2">layers_clear</span>
-              <span className="text-xs">{t.noLayers}</span>
+          <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+              <span className="material-symbols-outlined text-3xl mb-2 text-slate-300">layers_clear</span>
+              <span className="text-xs text-slate-400">{t.noLayers}</span>
           </div>
       );
   }
 
   return (
     <div className="flex flex-col space-y-1 p-2">
-      {reversedElements.map((el) => (
-        <div
-          key={el.id}
-          draggable
-          onDragStart={(e) => handleDragStart(e, el.id)}
-          onDragOver={handleDragOver}
-          onDrop={(e) => handleDrop(e, el.id)}
-          onClick={() => onSelect(el.id)}
-          className={`flex items-center justify-between p-2 rounded-lg cursor-pointer border transition-all ${
-            selectedId === el.id 
-              ? 'bg-blue-900/20 border-blue-500/30 shadow-sm' 
-              : 'bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5'
-          } ${draggedItem === el.id ? 'opacity-50' : ''}`}
-        >
-          <div className="flex items-center space-x-3 overflow-hidden">
-            <span className="material-symbols-outlined text-gray-600 text-sm cursor-grab active:cursor-grabbing hover:text-gray-400 transition-colors">drag_indicator</span>
-            <span className={`material-symbols-outlined text-sm ${selectedId === el.id ? 'text-blue-400' : 'text-gray-500'}`}>
-                {getIcon(el.type)}
-            </span>
-            <span className={`text-xs truncate max-w-[120px] font-medium ${selectedId === el.id ? 'text-white' : 'text-gray-400'}`}>
-                {el.name}
-            </span>
-          </div>
-          
-          <button 
-             onClick={(e) => { e.stopPropagation(); onDelete(el.id); }}
-             className="text-gray-600 hover:text-red-400 p-1 rounded hover:bg-white/5 transition-colors opacity-0 group-hover:opacity-100"
-          >
-             <span className="material-symbols-outlined text-sm">delete</span>
-          </button>
-        </div>
-      ))}
+      {reversedElements.map((el) => {
+        const isSelected = selectedIds.includes(el.id);
+        
+        return (
+            <div
+            key={el.id}
+            draggable
+            onDragStart={(e) => handleDragStart(e, el.id)}
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, el.id)}
+            onClick={(e) => handleLayerClick(e, el.id)}
+            className={`flex items-center justify-between p-2.5 rounded-lg cursor-pointer border transition-all group ${
+                isSelected 
+                ? 'bg-blue-50 border-blue-200 shadow-sm z-10' 
+                : 'bg-white border-transparent hover:bg-slate-50 hover:border-slate-200'
+            } ${draggedItem === el.id ? 'opacity-50 dashed border-slate-300' : ''}`}
+            >
+            <div className="flex items-center space-x-3 overflow-hidden">
+                <span className={`material-symbols-outlined text-sm cursor-grab active:cursor-grabbing transition-colors ${isSelected ? 'text-blue-400' : 'text-slate-300 group-hover:text-slate-400'}`}>drag_indicator</span>
+                <span className={`material-symbols-outlined text-sm ${isSelected ? 'text-blue-600' : 'text-slate-500'}`}>
+                    {getIcon(el.type)}
+                </span>
+                <span className={`text-xs truncate max-w-[140px] font-medium ${isSelected ? 'text-blue-800' : 'text-slate-600'}`}>
+                    {el.name}
+                </span>
+            </div>
+            
+            <button 
+                onClick={(e) => { e.stopPropagation(); onDelete(el.id); }}
+                className={`p-1 rounded transition-colors opacity-0 group-hover:opacity-100 ${isSelected ? 'text-blue-400 hover:text-red-500 hover:bg-blue-100' : 'text-slate-400 hover:text-red-500 hover:bg-slate-100'}`}
+                title="Delete Layer"
+            >
+                <span className="material-symbols-outlined text-sm">delete</span>
+            </button>
+            </div>
+        );
+      })}
     </div>
   );
 };

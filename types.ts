@@ -19,7 +19,7 @@ export type AnimationType =
     | 'none' 
     | 'fade' | 'slide-up' | 'slide-down' | 'slide-left' | 'slide-right' | 'scale' | 'bounce' | 'spin' // Entry focused
     | 'rotate' // Hover focused
-    | 'float' | 'breathing' | 'shimmer' | 'heartbeat' | 'shake' | 'wiggle' | 'pulse'; // Idle focused
+    | 'float' | 'breathing' | 'shimmer' | 'heartbeat' | 'shake' | 'wiggle' | 'pulse' | 'carousel-fade'; // Idle focused
 
 export type AnimationEasing = 'linear' | 'ease' | 'ease-out' | 'ease-in-out' | 'elastic' | 'bounce-out';
 
@@ -57,7 +57,7 @@ export interface CanvasElement {
   name: string;
   style: React.CSSProperties;
   content?: string; // Text content, Icon name, or Value for charts (as string "50")
-  dataBinding?: string; // Placeholder for Power BI measure name
+  dataBinding?: string; // Placeholder for Power BI measure name (Text/Simple inputs)
   
   // New features
   conditionalFormatting?: ConditionalRule[];
@@ -70,9 +70,21 @@ export interface CanvasElement {
     strokeWidth?: number;
     color?: string; // Fill or Stroke color
     backgroundColor?: string; // Track color (or Fill color for Area charts)
-    dataPoints?: number[]; // For sparklines and bar charts
-    categories?: string[]; // For bar chart labels
+    dataPoints?: number[]; // For sparklines and bar charts (Visual Preview)
+    categories?: string[]; // For bar chart labels (Visual Preview)
     imageUrl?: string; // For images
+    
+    // Granular Visual Controls
+    barGap?: number; // For bar/column charts (px)
+    barRadius?: number; // For bar/column charts (px)
+    lineSmoothing?: boolean; // For area/sparkline (curve vs linear)
+    lineCap?: 'round' | 'butt'; // For progress/donut
+    showAxis?: boolean; // Toggle axis labels
+    axisColor?: string;
+    
+    // Power BI Bindings
+    axisBinding?: string; // e.g. VALUES('Date'[Date])
+    valueBinding?: string; // e.g. [Total Sales]
   };
   
   tableProps?: {
@@ -90,16 +102,18 @@ export interface CanvasSettings {
   width: number;
   height: number;
   backgroundColor: string;
+  background?: string; // NEW: Supports gradients (e.g. 'linear-gradient(...)')
   borderRadius: number;
   borderColor: string;
   borderWidth: number;
-  borderStyle: 'solid' | 'dashed' | 'dotted'; // New
+  borderStyle: 'solid' | 'dashed' | 'dotted';
   showShadow: boolean;
+  isResponsive?: boolean; // NEW: If true, exports width/height as 100%
 }
 
 export interface ProjectState {
   elements: CanvasElement[];
-  selectedId: string | null;
+  selectedIds: string[]; // UPDATED: Array support for multi-selection
   canvasSettings: CanvasSettings;
 }
 

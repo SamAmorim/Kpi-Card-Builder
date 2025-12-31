@@ -28,7 +28,7 @@ const App: React.FC = () => {
 
   const [project, setProject] = useState<ProjectState>({
     elements: [],
-    selectedId: null,
+    selectedIds: [], // UPDATED: Array
     canvasSettings: {
       width: 400,
       height: 300,
@@ -44,6 +44,17 @@ const App: React.FC = () => {
   // History State
   const [historyPast, setHistoryPast] = useState<ProjectState[]>([]);
   const [historyFuture, setHistoryFuture] = useState<ProjectState[]>([]);
+
+  // REFS FOR SHORTCUTS (To avoid stale closures in event listeners)
+  const projectRef = useRef(project);
+  const historyPastRef = useRef(historyPast);
+  const historyFutureRef = useRef(historyFuture);
+
+  useEffect(() => {
+      projectRef.current = project;
+      historyPastRef.current = historyPast;
+      historyFutureRef.current = historyFuture;
+  }, [project, historyPast, historyFuture]);
 
   const t = TRANSLATIONS[lang];
 
@@ -153,6 +164,22 @@ const App: React.FC = () => {
       newElement.style = { ...newElement.style, width: 80, height: 80, borderRadius: 8 };
       newElement.chartProps = { imageUrl: 'https://via.placeholder.com/150' };
     } 
+    else if (type === 'table') {
+      newElement.style = { ...newElement.style, width: 320, height: 160, backgroundColor: '#ffffff', borderRadius: 8 };
+      newElement.tableProps = {
+          columns: [
+              { id: uuidv4(), header: 'Category', width: 40, dataBinding: '[Category]' },
+              { id: uuidv4(), header: 'Value', width: 30, dataBinding: '[Value]' },
+              { id: uuidv4(), header: 'YoY', width: 30, dataBinding: '[YoY %]' }
+          ],
+          rowHeight: 32,
+          headerColor: '#64748b',
+          headerBgColor: '#f8fafc',
+          rowColor: '#334155',
+          rowBgColor: '#ffffff',
+          gridColor: '#e2e8f0'
+      };
+    }
     else if (type === 'progress-bar') {
       newElement.style = { ...newElement.style, width: 200, height: 10, borderRadius: 5 };
       newElement.chartProps = { value: 50, color: '#3b82f6', backgroundColor: '#e2e8f0' };
@@ -196,7 +223,7 @@ const App: React.FC = () => {
     setProject(prev => ({
       ...prev,
       elements: [...prev.elements, newElement],
-      selectedId: newElement.id
+      selectedIds: [newElement.id] // Auto select new
     }));
   };
 
@@ -225,7 +252,7 @@ const App: React.FC = () => {
     setProject(prev => ({
       ...prev,
       elements: prev.elements.filter(el => el.id !== id),
-      selectedId: null
+      selectedIds: prev.selectedIds.filter(sid => sid !== id)
     }));
     addToast(t.deleted, 'success');
   }, [t.deleted, project, saveToHistory]);
@@ -262,14 +289,14 @@ const App: React.FC = () => {
           }));
           setProject({
             elements: newElements,
-            selectedId: null,
+            selectedIds: [],
             canvasSettings: { ...template.canvasSettings }
           });
       } else {
           // Scratch
           setProject({
             elements: [],
-            selectedId: null,
+            selectedIds: [],
             canvasSettings: { 
                 width: 400, 
                 height: 300, 
@@ -295,51 +322,107 @@ const App: React.FC = () => {
                           target.tagName === 'TEXTAREA' || 
                           target.isContentEditable;
 
-          // Undo / Redo (Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z)
+          const currentProject = projectRef.current;
+          const past = historyPastRef.current;
+          const future = historyFutureRef.current;
+
+          // Undo / Redo
           if ((e.ctrlKey || e.metaKey)) {
               const key = e.key.toLowerCase();
               if (key === 'z') {
                   if (e.shiftKey) { 
-                      if (!isInput) { e.preventDefault(); redo(); } 
+                      // Redo Logic
+                      if (!isInput && future.length > 0) { 
+                          e.preventDefault(); 
+                          const next = future[0];
+                          const newFuture = future.slice(1);
+                          setHistoryPast(prev => [...prev, currentProject]);
+                          setProject(next);
+                          setHistoryFuture(newFuture);
+                          addToast(t.redo, 'info');
+                      } 
                   } else { 
-                      if (!isInput) { e.preventDefault(); undo(); } 
+                      // Undo Logic
+                      if (!isInput && past.length > 0) { 
+                          e.preventDefault(); 
+                          const previous = past[past.length - 1];
+                          const newPast = past.slice(0, past.length - 1);
+                          setHistoryFuture(prev => [currentProject, ...prev]);
+                          setProject(previous);
+                          setHistoryPast(newPast);
+                          addToast(t.undo, 'info');
+                      } 
                   }
               }
               if (key === 'y') { 
-                  if (!isInput) { e.preventDefault(); redo(); } 
+                  // Redo Logic
+                  if (!isInput && future.length > 0) { 
+                      e.preventDefault(); 
+                      const next = future[0];
+                      const newFuture = future.slice(1);
+                      setHistoryPast(prev => [...prev, currentProject]);
+                      setProject(next);
+                      setHistoryFuture(newFuture);
+                      addToast(t.redo, 'info');
+                  } 
               }
           }
 
           // Delete
           if (e.key === 'Delete' || e.key === 'Backspace') {
-              if (project.selectedId && !isInput) { e.preventDefault(); deleteElement(project.selectedId); }
+              if (currentProject.selectedIds.length > 0 && !isInput) { 
+                  e.preventDefault();
+                  // Save History
+                  setHistoryPast(prev => {
+                      const newHistory = [...prev, currentProject];
+                      if (newHistory.length > 20) return newHistory.slice(newHistory.length - 20);
+                      return newHistory;
+                  });
+                  setHistoryFuture([]); 
+                  
+                  // Delete ALL selected
+                  setProject(prev => ({
+                      ...prev,
+                      elements: prev.elements.filter(el => !prev.selectedIds.includes(el.id)),
+                      selectedIds: []
+                  }));
+                  addToast(t.deleted, 'success');
+              }
           }
 
           // Nudge Elements (Arrow Keys)
-          if (project.selectedId && !isInput && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+          if (currentProject.selectedIds.length > 0 && !isInput && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
               e.preventDefault();
-              const el = project.elements.find(el => el.id === project.selectedId);
-              if (!el) return;
               
-              saveToHistory(); // Save history for nudge actions
+              // Save History
+              setHistoryPast(prev => {
+                  const newHistory = [...prev, currentProject];
+                  if (newHistory.length > 20) return newHistory.slice(newHistory.length - 20);
+                  return newHistory;
+              });
+              setHistoryFuture([]); // Clear redo on new action
 
               const step = e.shiftKey ? 10 : 1;
-              const styleUpdates: any = {};
-              const currentLeft = parseInt(el.style.left?.toString() || '0');
-              const currentTop = parseInt(el.style.top?.toString() || '0');
-
-              if (e.key === 'ArrowUp') styleUpdates.top = currentTop - step;
-              if (e.key === 'ArrowDown') styleUpdates.top = currentTop + step;
-              if (e.key === 'ArrowLeft') styleUpdates.left = currentLeft - step;
-              if (e.key === 'ArrowRight') styleUpdates.left = currentLeft + step;
+              const dx = (e.key === 'ArrowLeft' ? -step : (e.key === 'ArrowRight' ? step : 0));
+              const dy = (e.key === 'ArrowUp' ? -step : (e.key === 'ArrowDown' ? step : 0));
               
-              updateElement(project.selectedId, { style: { ...el.style, ...styleUpdates } });
+              setProject(prev => ({
+                  ...prev,
+                  elements: prev.elements.map(item => {
+                      if (prev.selectedIds.includes(item.id)) {
+                          const currentLeft = parseInt(item.style.left?.toString() || '0');
+                          const currentTop = parseInt(item.style.top?.toString() || '0');
+                          return { ...item, style: { ...item.style, left: currentLeft + dx, top: currentTop + dy } };
+                      }
+                      return item;
+                  })
+              }));
           }
       };
 
       window.addEventListener('keydown', handleGlobalKeys);
       return () => window.removeEventListener('keydown', handleGlobalKeys);
-  }, [project, historyPast, historyFuture, undo, redo, deleteElement, saveToHistory]);
+  }, [t]); 
 
   const generatedCode = generateCode(project.elements, project.canvasSettings);
 
@@ -380,7 +463,6 @@ const App: React.FC = () => {
     </button>
   );
 
-  // New Compact Shape Button for Sub-options
   const ShapeButton: React.FC<{ icon: string; label: string; onClick: () => void }> = ({ icon, label, onClick }) => (
     <button onClick={onClick} className="flex-1 flex flex-col items-center justify-center p-2 rounded-lg hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-all group">
          <span className="material-symbols-outlined text-slate-500 group-hover:text-blue-600 mb-1">{icon}</span>
@@ -410,7 +492,6 @@ const App: React.FC = () => {
             </div>
             
             <div className="flex items-center space-x-3">
-            {/* PLAY BUTTON FOR ANIMATIONS */}
             <button 
                 onClick={() => setAnimationTrigger(prev => prev + 1)}
                 className="bg-white/5 text-blue-400 px-4 py-2 rounded-xl text-xs font-bold hover:bg-white/10 flex items-center border border-white/10 transition-all"
@@ -440,18 +521,15 @@ const App: React.FC = () => {
         </header>
       )}
       
-      {/* REST OF THE APP REMAINS UNCHANGED VISUALLY, BUT LOGICALLY WRAPPED OR SAME */}
+      {/* LANDING PAGE - (Omitting long content for brevity, assumed unchanged) */}
       {view === 'landing' ? (
         <div 
             className="h-full w-full overflow-y-auto overflow-x-hidden bg-transparent text-white flex flex-col font-sans selection:bg-blue-500 selection:text-white relative scroll-smooth"
             onMouseMove={handleMouseMove}
         >
-        
+        {/* ... Landing Content (See previous App.tsx for full content) ... */}
         {/* Note: The Canvas is in index.html as fixed layer 0 */}
-        {/* Subtle Fade Overlay to blend grid at bottom */}
         <div className="fixed inset-0 bg-gradient-to-t from-[#020204] via-transparent to-transparent z-0 pointer-events-none opacity-80"></div>
-
-        {/* Navbar */}
         <nav className="fixed top-0 left-0 right-0 z-50 p-6 flex justify-between items-center max-w-7xl mx-auto w-full">
            <div className="font-extrabold text-xl tracking-tighter flex items-center text-white/90">
              <div className="w-8 h-8 rounded bg-white flex items-center justify-center mr-3 shadow-[0_0_15px_rgba(255,255,255,0.3)]">
@@ -463,103 +541,45 @@ const App: React.FC = () => {
              {lang === 'en' ? 'EN' : 'PT'}
            </button>
         </nav>
-
-        {/* Main Hero */}
         <div className="relative z-10 flex-1 flex flex-col items-center justify-center pt-32 pb-20 px-4 max-w-7xl mx-auto w-full text-center">
-           
-           {/* Beam Effect */}
            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-[500px] bg-gradient-to-b from-transparent via-blue-500 to-transparent opacity-20 blur-sm"></div>
-
            <div className="inline-flex items-center space-x-2 px-3 py-1 bg-white/5 border border-white/10 text-blue-400 rounded-full text-[10px] font-mono mb-8 backdrop-blur-md animate-in fade-in slide-in-from-top-4 duration-1000">
              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
              <span>DAX GENERATOR ENGINE ACTIVE</span>
            </div>
-
            <h1 className="text-5xl md:text-8xl font-bold text-white mb-6 tracking-tight leading-[0.95] drop-shadow-2xl animate-in fade-in zoom-in-95 duration-700">
              {t.heroTitleStart} <br/>
              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400">{t.heroTitleEnd}</span>
            </h1>
-
            <p className="text-lg md:text-xl text-gray-400 mb-12 max-w-2xl leading-relaxed font-light animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-100">
              {t.heroSubtitle}
            </p>
-
            <div className="flex flex-col md:flex-row items-center gap-4 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
-               <button 
-                  onClick={() => setView('template-selection')} 
-                  className="group relative px-8 py-4 bg-white text-black font-bold rounded-full hover:scale-105 transition-all duration-200 overflow-hidden"
-                >
+               <button onClick={() => setView('template-selection')} className="group relative px-8 py-4 bg-white text-black font-bold rounded-full hover:scale-105 transition-all duration-200 overflow-hidden">
                  <span className="relative z-10 flex items-center">{t.ctaStart} <span className="material-symbols-outlined ml-2 text-lg transition-transform group-hover:translate-x-1">arrow_forward</span></span>
                </button>
            </div>
-           
-           {/* Scroll Indicator - Enhanced & Moved Right */}
            <div className="absolute bottom-8 right-12 animate-bounce flex flex-col items-center gap-2 z-20 pointer-events-none">
                 <span className="text-[10px] font-mono uppercase tracking-widest text-blue-400 font-bold bg-black/50 px-3 py-1 rounded-full border border-white/10 backdrop-blur-md shadow-lg shadow-blue-900/20">Scroll to Explore</span>
                 <span className="material-symbols-outlined text-blue-400 text-2xl drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]">keyboard_arrow_down</span>
            </div>
         </div>
-
-        {/* Floating Cards (3D Tilt with Parallax) - UPDATED TO USE BRIGHT TEMPLATES */}
         <div className="relative w-full max-w-6xl mx-auto h-[400px] perspective-1000 hidden md:block mt-10 z-10">
              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-blue-500/10 blur-[120px] rounded-full pointer-events-none"></div>
-             
-             {/* Card 1 - SaaS Growth (Purple) */}
-             <div 
-                className="absolute top-10 left-20 w-[280px] hover:z-20 hover:scale-110 transition-all duration-500 transform rotate-y-12 rotate-z-6 shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/5 rounded-xl overflow-hidden"
-                style={{ transform: `translateX(${-mousePos.x * 0.5}px) translateY(${-mousePos.y * 0.5}px) rotateY(12deg) rotateZ(6deg)` }}
-             >
+             <div className="absolute top-10 left-20 w-[280px] hover:z-20 hover:scale-110 transition-all duration-500 transform rotate-y-12 rotate-z-6 shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/5 rounded-xl overflow-hidden" style={{ transform: `translateX(${-mousePos.x * 0.5}px) translateY(${-mousePos.y * 0.5}px) rotateY(12deg) rotateZ(6deg)` }}>
                  <MiniPreview elements={TEMPLATES[5].elements} settings={TEMPLATES[5].canvasSettings} />
              </div>
-
-             {/* Card 2 (Center) - Revenue Trend (White/Green) */}
-             <div 
-                className="absolute top-0 left-1/2 -translate-x-1/2 w-[340px] z-10 hover:scale-110 transition-all duration-500 shadow-[0_0_80px_rgba(59,130,246,0.3)] border border-white/10 rounded-2xl overflow-hidden"
-                style={{ transform: `translateX(${mousePos.x}px) translateY(${mousePos.y}px)` }}
-             >
+             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[340px] z-10 hover:scale-110 transition-all duration-500 shadow-[0_0_80px_rgba(59,130,246,0.3)] border border-white/10 rounded-2xl overflow-hidden" style={{ transform: `translateX(${mousePos.x}px) translateY(${mousePos.y}px)` }}>
                  <MiniPreview elements={TEMPLATES[7].elements} settings={TEMPLATES[7].canvasSettings} />
-                 {/* Scan Line */}
                  <div className="absolute top-0 left-0 w-full h-[2px] bg-blue-400 shadow-[0_0_10px_#60a5fa] animate-[beam-scan_3s_linear_infinite]"></div>
              </div>
-
-             {/* Card 3 - Ecommerce (White) */}
-             <div 
-                className="absolute top-20 right-20 w-[280px] hover:z-20 hover:scale-110 transition-all duration-500 transform -rotate-y-12 -rotate-z-6 shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/5 rounded-xl overflow-hidden"
-                style={{ transform: `translateX(${-mousePos.x * 0.8}px) translateY(${-mousePos.y * 0.8}px) rotateY(-12deg) rotateZ(-6deg)` }}
-             >
+             <div className="absolute top-20 right-20 w-[280px] hover:z-20 hover:scale-110 transition-all duration-500 transform -rotate-y-12 -rotate-z-6 shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/5 rounded-xl overflow-hidden" style={{ transform: `translateX(${-mousePos.x * 0.8}px) translateY(${-mousePos.y * 0.8}px) rotateY(-12deg) rotateZ(-6deg)` }}>
                  <MiniPreview elements={TEMPLATES[6].elements} settings={TEMPLATES[6].canvasSettings} />
              </div>
         </div>
-
-        {/* Feature Strip (Updated Colors & Translations) */}
         <div className="w-full border-y border-white/5 bg-black/50 backdrop-blur-sm py-16 mt-20 relative z-10">
             <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 px-6">
-                {[
-                    { 
-                        title: t.feature1Title, 
-                        desc: t.feature1Desc, 
-                        icon: "html",
-                        color: "text-orange-400",
-                        bg: "bg-orange-500/10",
-                        border: "border-orange-500/20"
-                    },
-                    { 
-                        title: t.feature2Title, 
-                        desc: t.feature2Desc, 
-                        icon: "layers_clear",
-                        color: "text-blue-400",
-                        bg: "bg-blue-500/10",
-                        border: "border-blue-500/20"
-                    },
-                    { 
-                        title: t.feature3Title, 
-                        desc: t.feature3Desc, 
-                        icon: "bolt",
-                        color: "text-yellow-400",
-                        bg: "bg-yellow-500/10",
-                        border: "border-yellow-500/20"
-                    }
-                ].map((f, i) => (
+                {[{ title: t.feature1Title, desc: t.feature1Desc, icon: "html", color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20" },{ title: t.feature2Title, desc: t.feature2Desc, icon: "layers_clear", color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20" },{ title: t.feature3Title, desc: t.feature3Desc, icon: "bolt", color: "text-yellow-400", bg: "bg-yellow-500/10", border: "border-yellow-500/20" }].map((f, i) => (
                     <div key={i} className={`flex items-start space-x-4 group cursor-default p-4 rounded-2xl border ${f.border} bg-white/5 hover:bg-white/10 transition-all duration-300`}>
                         <div className={`w-12 h-12 rounded-xl ${f.bg} border ${f.border} flex items-center justify-center ${f.color} group-hover:scale-110 transition-transform`}>
                             <span className="material-symbols-outlined text-2xl">{f.icon}</span>
@@ -572,23 +592,14 @@ const App: React.FC = () => {
                 ))}
             </div>
         </div>
-        
-        {/* NEW: Demo / Engine Preview Section */}
         <div className="relative z-10">
              <LandingDemoSection lang={lang} />
         </div>
-
         <footer className="py-12 text-center relative z-10 border-t border-white/5 bg-[#020204]">
-             <a 
-                href="https://www.linkedin.com/in/samamorim/" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="inline-block px-4 py-2 rounded-full border border-white/5 bg-white/5 backdrop-blur text-[10px] text-gray-500 font-mono hover:text-white hover:border-blue-500/30 hover:bg-blue-500/10 transition-all cursor-pointer group"
-            >
+             <a href="https://www.linkedin.com/in/samamorim/" target="_blank" rel="noopener noreferrer" className="inline-block px-4 py-2 rounded-full border border-white/5 bg-white/5 backdrop-blur text-[10px] text-gray-500 font-mono hover:text-white hover:border-blue-500/30 hover:bg-blue-500/10 transition-all cursor-pointer group">
                  Developed by <span className="text-white font-bold group-hover:text-blue-400 transition-colors">Samuel Amorim</span>
              </a>
         </footer>
-
       </div>
       ) : view === 'template-selection' ? (
         <TemplateSelector 
@@ -603,7 +614,7 @@ const App: React.FC = () => {
         <div className="flex-1 flex overflow-hidden">
         
             {/* Left Toolbar (Fixed - WIDER & CLEARER - WHITE THEME) */}
-            <aside className="w-48 bg-white border-r border-slate-200 flex flex-col p-3 z-20 shrink-0 overflow-y-auto">
+            <aside className="w-56 bg-white border-r border-slate-200 flex flex-col p-3 z-20 shrink-0 overflow-y-auto">
                 <div className="mb-2 px-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Basic</div>
                 <ToolButton icon="title" label="Add Text" onClick={() => addElement('text')} />
                 
@@ -623,6 +634,7 @@ const App: React.FC = () => {
                 <div className="w-full h-px bg-slate-200 my-4"></div>
                 
                 <div className="mb-2 px-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Data</div>
+                <ToolButton icon="table_chart" label="Data Grid" onClick={() => addElement('table')} />
                 <ToolButton icon="linear_scale" label="Progress" onClick={() => addElement('progress-bar')} />
                 <ToolButton icon="data_usage" label="Donut" onClick={() => addElement('circular-progress')} />
                 <ToolButton icon="show_chart" label="Sparkline" onClick={() => addElement('sparkline')} />
@@ -636,8 +648,8 @@ const App: React.FC = () => {
                 <Canvas 
                 elements={project.elements}
                 settings={project.canvasSettings}
-                selectedId={project.selectedId}
-                onSelect={(id) => setProject(p => ({ ...p, selectedId: id }))}
+                selectedIds={project.selectedIds}
+                onSelect={(ids) => setProject(p => ({ ...p, selectedIds: ids }))}
                 onUpdate={updateElement}
                 onDelete={deleteElement}
                 onInteractionStart={saveToHistory}
@@ -648,15 +660,17 @@ const App: React.FC = () => {
 
             {/* Right Properties Panel (Fixed) */}
             <PropertiesPanel 
-            selectedElement={project.elements.find(el => el.id === project.selectedId)}
-            elements={project.elements}
-            canvasSettings={project.canvasSettings}
-            onUpdateElement={updateElementWithHistory}
-            onUpdateCanvas={updateCanvas}
-            onDelete={deleteElement}
-            onSelect={(id) => setProject(p => ({ ...p, selectedId: id }))}
-            onReorder={reorderElement}
-            t={t}
+                // Pass the LAST selected element as the primary one for editing
+                selectedElement={project.elements.find(el => el.id === project.selectedIds[project.selectedIds.length - 1])}
+                selectedIds={project.selectedIds} // NEW PROP
+                elements={project.elements}
+                canvasSettings={project.canvasSettings}
+                onUpdateElement={updateElementWithHistory}
+                onUpdateCanvas={updateCanvas}
+                onDelete={deleteElement}
+                onSelect={(ids) => setProject(p => ({ ...p, selectedIds: ids }))} // UPDATED PROP
+                onReorder={reorderElement}
+                t={t}
             />
         </div>
       )}
